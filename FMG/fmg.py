@@ -116,7 +116,9 @@ class Fmg():
 
         # Debuglog
         if self.debug:
-            debuglog = logging.FileHandler("fmg_debug.log")
+            debuglog_path = masterlog_path
+            debuglog_filename = "fmg_debug.log"
+            debuglog = logging.FileHandler(os.path.join(debuglog_path, debuglog_filename))
             debuglog.setLevel(logging.DEBUG)
             self.logger.addHandler(debuglog)
 
@@ -219,55 +221,57 @@ class Fmg():
         self.logger.debug("Setting server url")
         if self.serverurl:
             self.logger.debug("Using server URL from cmd.line argument")
-            self.serverurl = args.server
         elif not self.force:
             self.logger.debug("Prompting for server URL")
+            verify_url = False
             
             if not email_re:
                 self.logger.debug("Getting server url from email address")
                 email_re = re.match(r"(.+)@(.+)", self.email)
-    
-                verify_url = False
-                if self.imap or self.pop:
-                    if self.imap:
-                        self.logger.debug("Protocol is IMAP, completing server url accordingly")
-                        self.serverurl = "imap." + email_re.group(2)
-                    elif self.pop:
-                        self.logger.debug("Protocol is POP, completing server url accordingly")
-                        self.serverurl = "pop." + email_re.group(2)
 
-                    input_txt = "Use %s as server url? [YES/No/Cancel]: " % self.serverurl
-        
-                    while True:
-                        verify_url = raw_input(input_txt)
-                        if verify_url in yes:
-                            self.logger.debug("Server url verified by user")
-                            verify_url = True
-                            break
-                        elif verify_url in no:
-                            verify_url = False
-                        elif verify_url in cancel:
-                            self.logger.info("Server URL input cancelled")
+            if self.imap or self.pop:
+                if self.imap:
+                    self.logger.debug("Protocol is IMAP, completing server url accordingly")
+                    self.serverurl = "imap." + email_re.group(2)
+                elif self.pop:
+                    self.logger.debug("Protocol is POP, completing server url accordingly")
+                    self.serverurl = "pop." + email_re.group(2)
+                else:
+                    self.logger.debug("No protocol identified. Using 'mail' as subdomain.")
+                    self.serverurl = "mail." + email_re.group(2)
+
+                input_txt = "Use %s as server url? [YES/No/Cancel]: " % self.serverurl
+
+                while True:
+                    verify_url = raw_input(input_txt)
+                    if verify_url in yes:
+                        self.logger.debug("Server url verified by user")
+                        verify_url = True
+                        break
+                    elif verify_url in no:
+                        verify_url = False
+                    elif verify_url in cancel:
+                        self.logger.info("Server URL input cancelled")
+                        self.logger.info("----- Terminating FMG -----")
+                        exit(1)
+                    else:
+                        print "Invalid input, try again"
+
+            if not verify_url:
+                n = 0
+                while True:
+                    self.serverurl = raw_input("Server URL: ")
+                    if not self.serverurl == "":
+                        self.logger.debug("Server url entered: '%s'", self.serverurl)
+                        break
+                    else:
+                        n = n + 1
+                        if n == 3:
+                            self.logger.debug("Terminating after 3 prompts for server url")
+                            self.logger.critical("No server URL found")
                             self.logger.info("----- Terminating FMG -----")
                             exit(1)
-                        else:
-                            print "Invalid input, try again"
-
-                if not verify_url:
-                    n = 0
-                    while True:
-                        self.serverurl = raw_input("Server URL: ")
-                        if not self.serverurl == "":
-                            self.logger.debug("A server url was entered")
-                            break
-                        else:
-                            n = n + 1
-                            if n == 3:
-                                self.logger.debug("Terminating after 3 prompts for server url")
-                                self.logger.critical("No server URL found")
-                                self.logger.info("----- Terminating FMG -----")
-                                exit(1)
-                            print "No server URL was entered. Try again (%d/3)." % n
+                        print "No server URL was entered. Try again (%d/3)." % n
         else:
             self.logger.debug("Forced to assume default server URL")
 
@@ -359,7 +363,7 @@ class Fmg():
                 self.port = "993"
             elif self.protocol == 'IMAP' and not self.ssl:
                 self.logger.debug("Protocol is IMAP and SSL it NOT set. Suggesting default IMAP port")
-                port = "143"
+                self.port = "143"
             elif self.protocol == 'POP' and self.ssl:
                 self.logger.debug("Protocol is POP and SSL is set. Suggesting default secure POP3 (SSL-POP) port")
                 self.port = "995"
@@ -367,7 +371,7 @@ class Fmg():
                 self.logger.debug("Protocol is POP and SSL is NOT set. Suggesting default POP3 port")
                 self.port = "110"
 
-            input_txt = "Use %s as server port? [YES/No/Cancel]: " % port
+            input_txt = "Use %s as server port? [YES/No/Cancel]: " % self.port
             while True:
                 verify_port = raw_input(input_txt)
                 if verify_port in yes:
@@ -413,22 +417,22 @@ class Fmg():
         return
 
     # FMG INIT #
-    def __init__(self, email, username, password, server, port, imap, mapi, pop, ssl, nossl, debug, verbose, quiet, dry, force):
-        email = email
-        username = username
-        password = password
-        server = server
-        port = port
-        imap = imap
-        mapi = mapi
-        pop = pop
-        ssl = ssl
-        nossl = nossl
-        debug = debug
-        verbose = verbose
-        quiet = quiet
-        dry = dry
-        force = force
+    def __init__(self, email, username, password, serverurl, port, imap, mapi, pop, ssl, nossl, debug, verbose, quiet, dry, force):
+        self.email = email
+        self.username = username
+        self.password = password
+        self.serverurl = serverurl
+        self.port = port
+        self.imap = imap
+        self.mapi = mapi
+        self.pop = pop
+        self.ssl = ssl
+        self.nossl = nossl
+        self.debug = debug
+        self.verbose = verbose
+        self.quiet = quiet
+        self.dry = dry
+        self.force = force
 
         self.logSetup()
 
@@ -523,7 +527,6 @@ class Fmg():
         if not self.dry:
             if not self.quiet:
                 print "Grabbing mail... "
-
                 try:
                     self.acc.grabMail()
                     self.acc.retreived = False
@@ -541,7 +544,7 @@ class Fmg():
                 if not self.quiet:
                     print "Processing mail... "
                 try:
-                    self.acc.processMail()
+                    #self.acc.processMail()
                     if not self.quiet:
                         print "Mail processed"
                 except AccountError as ae:
@@ -623,7 +626,7 @@ if not args.quiet:
 f = Fmg(email = args.email,
         username = args.username,
         password = args.password,
-        server = args.server,
+        serverurl = args.server,
         port = args.port,
         imap = args.imap,
         mapi = args.mapi,

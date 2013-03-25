@@ -22,14 +22,14 @@
 # USE AT YOUR OWN RISK!
 ###
 
-import os.path, os, shutil, sys
-import re
+import os, shutil
 from time import localtime, strftime
 import zipfile
 import hashlib
-import email, errno, mimetypes
+import email, mimetypes
 import imaplib
 import logging
+import re
 
 from accountError import *
 
@@ -95,7 +95,7 @@ class Account():
             shutil.rmtree(self.maildirdir)
             shutil.rmtree(self.mboxdir)
         except Exception as e:
-            logger.error("Cleanup failed. %s", "e")
+            logger.error("Cleanup failed. %s", e)
         return
 
 ## PREPARE FILES AND FOLDERS ##
@@ -157,6 +157,14 @@ class Account():
 
         return
 
+    def parse_mailboxlist(self, line):
+        list_response_pattern = re.compile(r'\((?P<flags>.*?)\) "(?P<delimiter>.*)" (?P<name>.*)')
+        
+        flags, delimiter, mailbox_name = list_response_pattern.match(line).groups()
+        mailbox_name = mailbox_name.strip('"')
+        return (flags, delimiter, mailbox_name)
+         
+
 ### EMAIL GRABBING ###
     def grabImap(self):
         """Grabs mail from the accounts IMAP server"""
@@ -189,6 +197,7 @@ class Account():
             return
 
         mailbox_list = mailbox.list()
+        
         print mailbox_list
 
 #        mailbox.select()
@@ -199,13 +208,17 @@ class Account():
 
         # Close selected mailbox and log out
         logger.debug("Closing selected mailbox")
-        mailbox.close()
+        try:
+            mailbox.close()
+        except Exception as e:
+                logger.warn("Could not close selected mailbox")
+                logger.debug(e)
 
         logger.debug("Logging out")
         try:
             mailbox.logout()
         except Exception as e:
-            logger.error("Could not log out from server")
+            logger.warn("Could not log out from server")
             logger.debug(e)
             
         return
@@ -215,7 +228,7 @@ class Account():
         logger.debug("Grabbing mail")
 
         if self.protocol == 'IMAP':
-            grabImap(self)
+            self.grabImap()
 
         return
 
@@ -223,6 +236,7 @@ class Account():
 ### EMAIL PROCESSING ###
 
 ## CREATE A ZIP ARCHIVE CONTAINING ALL ORIGINAL FILES ##
+
     def zipOriginal(self):
         # Zip everything up
         self.origzipfilename = os.path.join(self.accountdir, self.basename + "_fmg.zip")
