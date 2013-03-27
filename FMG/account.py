@@ -103,6 +103,7 @@ class Account():
 
 ## PREPARE FILES AND FOLDERS ##
     def prepDir(self):
+        """Prepare file system directories for FMG"""
         logger.debug("Preparing account files and folders")
         # Prepare names
         # FMG directories
@@ -162,6 +163,7 @@ class Account():
 
 ### EMAIL GRABBING ###
     def connectImap(self):
+        """Connect to the accounts IMAP server and log on the user account with provided password."""
         # Connect to IMAP Server
         if not self.ssl: # ... without SSL
             logger.debug("Connecting without SSL")
@@ -198,6 +200,7 @@ class Account():
         
         flags, delimiter, mailbox_name = list_response_pattern.match(mailbox_list_item).groups()
         mailbox_name = mailbox_name.strip('"')
+        
         return (flags, delimiter, mailbox_name)
          
     def parse_raw_email(self, raw_email):
@@ -211,6 +214,7 @@ class Account():
             return raw_email.get_payload()
         
     def email_to_txt(self, email_id, email_message, mailbox_path):
+        """Write email message as text file"""
         # Get the basic parts of the email message
         if 'message-id' in email_message:
             email_message_id = email_message['message-id']
@@ -236,19 +240,9 @@ class Account():
             logger.debug(e)
         return
     
-    def processMailbox(self, imap_connection, mailbox_name):
+    def processMailbox(self, imap_connection, mailbox_name, mailbox_path):
         # TODO: Create MBOX
        
-        # Create folder for this mailbox
-        mailbox_path = os.path.join(self.accountdir, self.currentMailbox)
-        if not os.path.exists(mailbox_path):
-            try:
-                logger.debug("Creating mailbox folder '%s'", mailbox_path)
-                os.mkdir(mailbox_path)
-            except Exception as e:
-                logger.warn("Could not create mailbox folder")
-                logger.debug(e)        
-
         # Get a list of all the messages in the selected mailbox
         s_result, s_data = imap_connection.search(None, "ALL")
         logger.debug("Mailbox search result: %s", s_result)
@@ -299,6 +293,16 @@ class Account():
             
             for mailbox_list_item in mailbox_list:
                 flags, delimiter, mailbox_name = self.parse_mailboxlist(mailbox_list_item)
+                
+                # Create folder for this mailbox
+                mailbox_path = os.path.join(self.accountdir, mailbox_name)
+                if not os.path.exists(mailbox_path):
+                    try:
+                        logger.debug("Creating mailbox folder '%s'", mailbox_path)
+                        os.mkdir(mailbox_path)
+                    except Exception as e:
+                        logger.warn("Could not create mailbox folder '%s'", mailbox_path)
+                        logger.debug(e)  
 
                 # Select the mailbox. (If selection fails, return and continue with the next mailbox.)
                 try:
@@ -309,20 +313,20 @@ class Account():
                     logger.debug(e)
                     continue
 
-                # If the current mailbox has children, processing must be repeated for all children (recursive processing).
+                # If the current mailbox has children, add it to the list of mailboxes for subsequent processing.
                 if re.search("HasChildren", flags):
                     logger.debug("Mailbox has children")
                     response_code, childlist = imap_connection.list(mailbox_name)
                     logger.debug("(%s) %s", response_code, childlist)
                     for child in childlist:
                         child_flag, child_delimiter, child_name = self.parse_mailboxlist(child)
-                        logger.debug("Adding '%s' to list of mailboxes to process", child_name)
+                        logger.debug("Adding '%s' to list of mailboxes to process", child)
                         mailbox_list.append(child_name)
                 else:
                     logger.debug("Mailbox has no children")
                     try:
                         self.currentMailbox = os.path.join(self.currentMailbox, mailbox_name)
-                        self.processMailbox(imap_connection, mailbox_name)
+                        self.processMailbox(imap_connection, mailbox_name, mailbox_path)
                     except Exception as e:
                         logger.warn("Could not process IMAP mailbox '%s'", mailbox_name)
                         logger.debug(e)
