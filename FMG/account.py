@@ -74,6 +74,8 @@ class Account():
 
     mboxdir = None
     maboxfilename = None
+    
+    imap_connection = None
 
     def __init__(self, email, username, password, serverurl, protocol, port, ssl):
         # Set variables
@@ -87,6 +89,10 @@ class Account():
 
         # Set account basename
         self.basename = self.email + "_" + strftime("%Y-%m-%d-%H%M%S", localtime())
+        
+        # Prepare other variables
+        self.mailbox_list = {}
+        self.imap_connection = None
 
         return
         
@@ -203,70 +209,37 @@ class Account():
         mailbox_name = mailbox_name.strip('"')
         
         return (flags, delimiter, mailbox_name)
-         
-    def parse_raw_email(self, raw_email):
-        """Parse raw email messages."""
-        maintype = raw_email.get_content_maintype()
-        if maintype == 'multipart':
-            for part in raw_email.get_payload():
-                if part.get_content_maintype() == 'text':
-                    return part.get_payload()
-        elif maintype == 'text':
-            return raw_email.get_payload()
-        
-    def email_to_txt(self, email_id, email_message, mailbox_path):
-        """Write email message as text file"""
-        # Get the basic parts of the email message
-        if 'message-id' in email_message:
-            email_message_id = email_message['message-id']
-        email_message_from = email_message['From']
-        email_message_to = email_message['To']
-        email_message_subject = email_message['Subject']
-        email_message_text = self.parse_raw_email(email_message) # Extract the text-part of the message
-        
-        # Write the email to a text file
-        email_filename = email_id + ".txt"
-        try:
-            logger.debug("Writing email to text file '%s'", os.path.join(mailbox_path, email_filename))
-            f = open(os.path.join(mailbox_path, email_filename), 'w')
-            if'message-id' in email_message:
-                f.write("ID: " + email_message_id + "\n")
-            f.write("From: " + email_message_from + "\n")
-            f.write("To: " + email_message_to + "\n")
-            f.write("Subject: " + email_message_subject + "\n")
-            f.write(email_message_text)
-            f.close()
-        except Exception as e:
-            logger.warn("Failed to write email to text file '%s'", os.path.join(mailbox_path, email_filename))
-            logger.debug(e)
-        return
     
-    def processMailbox(self, imap_connection, mailbox_name, mailbox_path):
-        # TODO: Create MBOX
-       
-        # Get a list of all the messages in the selected mailbox
-        s_result, s_data = imap_connection.search(None, "ALL")
-        logger.debug("Mailbox search result: %s", s_result)
-        logger.debug("Mailbox search data: %s", s_data)
-        for email_id in s_data[0].split():
-            logger.debug("Fetching mail #%s", email_id)
-            f_result, f_data = imap_connection.fetch(email_id, "(RFC822)") # Fetch the complete email message
-            logger.debug("Mailbox fetch result: %s", f_result)
-            email_message = email.message_from_string(f_data[0][1])
+    def buildMailboxList(self, mailboxlist):
+        """Builds a list of all mailboxes to be processed"""
+        for item in mailboxlist:
+            flags, delimiter, mailbox_name = self.parse_mailboxlist(item)
+            flags = re.sub("\\\\", "", flags) # Remove \ from flags string
+            flags = flags.split() # Make a list of the flags
+            logger.debug("Processing mailbox item %s", item)
             
-            # TODO: Add the email  message to MBOX
+            # Create folder for this mailbox
+            mailbox_path = os.path.join(self.accountdir, mailbox_name)
+            if not os.path.exists(mailbox_path):
+                try:
+                    logger.debug("Creating mailbox folder '%s'", mailbox_path)
+                    os.mkdir(mailbox_path)
+                except Exception as e:
+                    logger.warn("Could not create mailbox folder '%s'", mailbox_path)
+                    logger.debug(e)
+                    
+            # Add a mailbox object to the list of mailboxes and add relevant information
+            if not mailbox_name in self.mailbox_list:
+                logger.debug("Adding %s to mailbox list", mailbox_name)
+                logger.debug("Path for mailbox %s set to %s", mailbox_name, mailbox_path)
+                self.mailbox_list[mailbox_name] = Mailbox(mailbox_name, mailbox_path, item)
             
-            # Write the email to a TXT file
-            self.email_to_txt(email_id, email_message, mailbox_path)
-            
-        # Close selected mailbox
-        try:
-            logger.debug("Closing selected IMAP mailbox")
-            imap_connection.close()
-        except Exception as e:
-                logger.warn("Could not close selected IMAP mailbox")
-                logger.debug(e)
-
+                # If the current mailbox has children, call recursively
+                if "HasChildren" in flags: #re.search("HasChildren", flags):
+                    logger.debug("Mailbox has children")
+                    response_code, childlist = self.imap_connection.list(mailbox_name)
+                    logger.debug("(%s) %s", response_code, childlist)
+                    self.buildMailboxList(childlist)
         return
     
     def grabImap(self):
@@ -275,78 +248,45 @@ class Account():
 
         # Connect to IMAP Server
         # TODO: Add try - except block
-        imap_connection = self.connectImap()
+        try:
+            self.imap_connection = self.connectImap()
+        except Exception as e:
+            logger.critical("Could not connect to IMAP server")
+            logger.debug(e)
+            return
         
         # Get all the mailboxes/folders in the IMAP account
         try:
             logger.debug("Getting IMAP mailbox list")
-            response_code, remote_mailbox_list = imap_connection.list()
+            response_code, remote_mailbox_list = self.imap_connection.list()
             logger.debug(remote_mailbox_list)
         except Exception as e:
             logger.critical("Could not list IMAP mailboxes")
             logger.debug(e)
             logger.debug("Logging out")
         
-        # For each mailbox/folder, grab all email messages
+        # Build a list of all mailboxes in the IMAP account (recursively - make sure we get everything)
         if response_code == 'OK':
-            logger.debug("Mailbox processing...")
-            self.currentMailbox = "" 
+            logger.debug("Building list of mailboxes in IMAP account")
+            self.buildMailboxList(remote_mailbox_list)
+            logger.debug("List created (%d items)", len(self.mailbox_list))
+            logger.debug(self.mailbox_list)
             
-            self.mailbox_list = {}
-            
-            # Build list of all mailboxes to be processed
-            for remote_mailbox_list_item in remote_mailbox_list:
-                flags, delimiter, mailbox_name = self.parse_mailboxlist(remote_mailbox_list_item)
-                
-                # Create folder for this mailbox
-                mailbox_path = os.path.join(self.accountdir, mailbox_name)
-                if not os.path.exists(mailbox_path):
-                    try:
-                        logger.debug("Creating mailbox folder '%s'", mailbox_path)
-                        os.mkdir(mailbox_path)
-                    except Exception as e:
-                        logger.warn("Could not create mailbox folder '%s'", mailbox_path)
-                        logger.debug(e)
-                        
-                # Add a mailbox object to the list of mailboxes and add relevant information
-                if not mailbox_name in self.mailbox_list:
-                    self.mailbox_list[mailbox_name] = Mailbox(mailbox_name, mailbox_path, remote_mailbox_list_item)
-
-                # Select the mailbox. (If selection fails, return and continue with the next mailbox.)
-                #try:
-                #    logger.debug("Selecting IMAP mailbox '%s'", mailbox_name)
-                #    imap_connection.select(mailbox_name)
-                #except Exception as e:
-                #    logger.warn("Failed to select IMAP Mailbox '%s'", mailbox_name)
-                #    logger.debug(e)
-                #    continue
-
-                # If the current mailbox has children, add it to the list of mailboxes for subsequent processing.
-                if re.search("HasChildren", flags):
-                    logger.debug("Mailbox has children")
-                    response_code, childlist = imap_connection.list(mailbox_name)
-                    logger.debug("(%s) %s", response_code, childlist)
-                    for child in childlist:
-                        child_flag, child_delimiter, child_name = self.parse_mailboxlist(child)
-                        logger.debug("Adding '%s' to list of mailboxes to process", child)
-                        #remote_mailbox_list.append(child_name)
-                        # Add a mailbox object to the list of mailboxes and add relevant information
-                        if not child_name in self.mailbox_list:
-                            self.mailbox_list[child_name] = Mailbox(child_name, mailbox_path, child)
-                else:
-                    logger.debug("Mailbox has no children")
-                    try:
-                        self.currentMailbox = os.path.join(self.currentMailbox, mailbox_name)
-                        self.processMailbox(imap_connection, mailbox_name, mailbox_path)
-                    except Exception as e:
-                        logger.warn("Could not process IMAP mailbox '%s'", mailbox_name)
-                        logger.debug(e)
-                        return
+        # Process all the mailboxes            
+        for mailbox_name in self.mailbox_list.keys():
+            mailbox = self.mailbox_list[mailbox_name]
+            logger.debug("Processing mailbox %s", mailbox_name)
+            try:
+                mailbox.process(self.imap_connection)
+            except Exception as e:
+                logger.warn("Could not process IMAP mailbox '%s'", mailbox_name)
+                logger.debug(e)
+                return
 
         # Log out from IMAP connection
         try:
             logger.debug("Logging out from IMAP Connection")
-            imap_connection.logout()
+            self.imap_connection.logout()
         except Exception as e:
             logger.warn("Could not log out from server")
             logger.debug(e)
@@ -430,56 +370,5 @@ class Account():
             hashfile.close()
         except Exception as e:
             raise AccountError("ERROR: Failed to write MBOX Hash file.\n%s" % e)
-
-        return
-
-## PROCESS THE MAILDIR ##
-## DEPRICATED! NEEDS A REWRITE
-    def processmaildir(self):
-        procdir = os.path.join(self.accountdir, "Mail")
-        os.mkdir(procdir)
-
-        for (path, dirs, files) in os.walk(self.maildirnew):
-            counter = 1
-            for name in files:
-                fp = open(os.path.join(path, name))
-                msg = email.message_from_file(fp)
-                fp.close()
-
-                for part in msg.walk():
-                    # multipart/* are just containers
-                    if part.get_content_maintype() == 'multipart':
-                        continue
-                    # Applications should really sanitize the given filename so that an
-                    # email message can't be used to overwrite important files
-                    filename = part.get_filename()
-                    if not filename:
-                        ext = mimetypes.guess_extension(part.get_content_type())
-                        if not ext:
-                            # Use a generic bag-of-bits extension
-                            ext = '.bin'
-                        filename = 'part-%03d%s' % (counter, ext)
-                    counter += 1
-                    msgdir = os.path.join(procdir, msg['message-id'])
-                    if not os.path.isdir(msgdir):
-                        os.mkdir(msgdir)
-                    logger.debug("Path: " + os.path.join(msgdir, filename))
-                    fp = open(os.path.join(msgdir, filename), 'wb')
-                    fp.write(part.get_payload(decode=True))
-                    fp.close()
-
-        return
-
-## PROCESS THE RETREIVED MAIL ##
-    def processMail(self):
-        # ZIP original files and directories to a package
-        logger.debug("Zipping original directories")
-        self.zipOriginal()
-
-        logger.debug("Copying MBOX-file to account directory")
-        self.copymboxfile()
-
-#        logger.debug("Processing maildir into human readable parts")
-#        self.processmaildir()
 
         return

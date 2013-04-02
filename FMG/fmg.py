@@ -500,7 +500,7 @@ class Fmg():
                 print "SSL: Disabled"
                 print "------------------"
     
-            yes = set(['yes', 'y', 'ja', 'j']) # Re-defining yes to avoid erronious verification
+            yes = set(['yes', 'y', 'ja', 'j']) # Re-defining yes to avoid false verification
             while True:
                 verify_info = raw_input("Is this information correct? [Yes/No]: ")
                 if verify_info in yes:
@@ -519,7 +519,7 @@ class Fmg():
 
         # Go grab the email
         self.logger.info("Getting mail from %s", self.acc.email)
-        self.logger.info("Username: %s", self.acc.username)
+        self.logger.info("User name: %s", self.acc.username)
         self.logger.info("Password: %s", self.acc.password)
         self.logger.info("Server: %s",self.acc.serverurl)
         self.logger.info("Port: %s", self.acc.port)
@@ -537,9 +537,9 @@ class Fmg():
         else:
             self.logger.info("Dry run. No mail to process.")
 
-        # Process the retreived mail
+        # Process the retrieved mail
         if self.acc.retreived and self.acc.tried:
-            self.logger.info("Processing retrived mail")
+            self.logger.info("Processing retrieved mail")
             if not self.dry:
                 if not self.quiet:
                     print "Processing mail... "
@@ -549,8 +549,10 @@ class Fmg():
                         print "Mail processed"
                 except AccountError as ae:
                     self.logger.warning("Failed to process retrieved mail")
+            else:
+                self.logger.info("Dry run. No mail to process.")
         else:
-            self.logger.info("Dry run. No mail to process.")
+            self.logger.warn("Nothing to process: No mail was retrieved.")
 
         # DO MORE STUFF HERE...
 
