@@ -529,37 +529,30 @@ class Fmg():
                 print "Grabbing mail... "
                 try:
                     self.acc.grabMail()
-                    self.acc.retreived = False
-                    self.acc.tried = True
                 except Exception as e:
                     self.logger.error("Failed to grab mail")
                     self.logger.debug(e)
         else:
             self.logger.info("Dry run. No mail to process.")
 
-        # Process the retrieved mail
-        if self.acc.retreived and self.acc.tried:
-            self.logger.info("Processing retrieved mail")
+        # Post-process the retrieved mail
+        if self.acc.retrieved:
+            self.logger.info("Post-Processing")
             if not self.dry:
                 if not self.quiet:
                     print "Processing mail... "
                 try:
-                    #self.acc.processMail()
+                    self.acc.postprocess()
                     if not self.quiet:
                         print "Mail processed"
                 except AccountError as ae:
-                    self.logger.warning("Failed to process retrieved mail")
+                    self.logger.warning("Failed to post-process retrieved mail")
             else:
-                self.logger.info("Dry run. No mail to process.")
+                self.logger.info("Dry run. No post-processing necessary.")
         else:
-            self.logger.warn("Nothing to process: No mail was retrieved.")
+            self.logger.warn("No mail retrieved, no post-processing necessary.")
 
-        # DO MORE STUFF HERE...
-
-        # Clean up the account
-        self.logger.debug("Cleaning up")
-        self.acc.cleanup()
-
+        # Terminate
         self.logger.info("----- FMG Complete -----")
         return
 

@@ -41,19 +41,24 @@ cancel = set(['q', 'c', 'e', 'quit', 'cancel', 'exit'])
 logger = logging.getLogger('FMG-log')
 
 ## ACCOUNT() ##
-class Mailbox():
+class FMGMailbox():
     """FMG Mailbox Class - store information needed to process mailboxes"""
     
     ## DEFINE CLASS VARIABLES ##
     name = None # The name of the mailbox
-    path = None # The local path to where content from this mailbox is stored
+    txtpath = None # The local txtpath to where text content from this mailbox is stored
     item = None # The remote mailbox item
+    processed = None # True if the mailbox has been processed, false if not.
+    selected = None # True if the mailbox was selected successfully, false if not.
+    mails = None # The number of mails found in the mailbox
     
     def __init__(self, name, path, item):
         logger.debug("Initializing mailbox item %s, %s, %s", name, path, item)
         self.name = name
-        self.path = path
+        self.txtpath = path
         self.item = item
+        self.processed = False
+        self.selected = False
         return
     
     def __str__(self):
@@ -69,7 +74,7 @@ class Mailbox():
         elif maintype == 'text':
             return raw_email.get_payload()    
     
-    def email_to_txt(self, email_id, email_message, mailbox_path):
+    def email_to_txt(self, email_id, email_message):
         """Write email message as text file"""
         # Get the basic parts of the email message
         if 'message-id' in email_message:
@@ -82,8 +87,8 @@ class Mailbox():
         # Write the email to a text file
         email_filename = email_id + ".txt"
         try:
-            logger.debug("Writing email to text file '%s'", os.path.join(mailbox_path, email_filename))
-            f = open(os.path.join(mailbox_path, email_filename), 'w')
+            logger.debug("Writing email to text file '%s'", os.path.join(self.txtpath, email_filename))
+            f = open(os.path.join(self.txtpath, email_filename), 'w')
             if'message-id' in email_message:
                 f.write("ID: " + email_message_id + "\n")
             f.write("From: " + email_message_from + "\n")
@@ -92,52 +97,60 @@ class Mailbox():
             f.write(email_message_text)
             f.close()
         except Exception as e:
-            logger.warn("Failed to write email to text file '%s'", os.path.join(mailbox_path, email_filename))
+            logger.warn("Failed to write email to text file '%s'", os.path.join(self.txtpath, email_filename))
             logger.debug(e)
         return    
     
-    def process(self, imap_connection):
-    
+    def process(self, imap_connection, mbox):
+        """ Process the mailbox by fetching the mail and write it to local output."""
         # Select the mailbox
         try:
             logger.debug("Selecting IMAP mailbox '%s'", self.name)
             selected = imap_connection.select(self.name, True) # Select the mailbox and set READONLY to True
         except Exception as e:
-            logger.warn("Failed to select IMAP Mailbox '%s'", self.name)
+            logger.warn("Failed to select IMAP mailbox '%s'", self.name)
             logger.debug(e)
             return
         
+        # If the mailbox was selected ok, process it.
         if selected[0] == "OK":
-            logger.debug("Selected mailbox contains %s messages", selected[1][0])
+            self.selected = True
+            self.mails = selected[1][0]
+            logger.debug("Selected mailbox contains %s messages", self.mails)
+            
+            # Get a list of all the messages in the selected mailbox
+            s_result, s_data = imap_connection.search(None, "ALL")
+            logger.debug("Mailbox search result: %s", s_result)
+            logger.debug("Mailbox search data: %s", s_data)
+            n = 0
+            for email_id in s_data[0].split():
+                logger.debug("Fetching mail #%s", email_id)
+                f_result, f_data = imap_connection.fetch(email_id, "(RFC822)") # Fetch the complete email message
+                logger.debug("Mailbox fetch result: %s", f_result)
+                email_message = email.message_from_string(f_data[0][1])
+                
+                # Add the email message to the MBOX
+                try:
+                    logger.debug("Adding email #%s from mailbox %s to MBOX", email_id, self.name)
+                    mbox.add(email_message)
+                except Exception as e:
+                    logger.warn("Failed to add email #%s from mailbox %s to MBOX", email_id, self.name)
+                    logger.debug(e)
+                
+                # Write the email to a TXT file
+                self.email_to_txt(email_id, email_message)            
+                
+                n += 1
+            logger.debug("Expected %s, processed %s emails", self.mails, n)
+            
+            # Close selected mailbox
+            logger.debug("Closing selected IMAP mailbox")
+            imap_connection.close()
         else:
             logger.debug("Could not select mailbox.")
             logger.debug("Server responded: %s", selected)
-            return
-                
-        # TODO: Create MBOX
-       
-        # Get a list of all the messages in the selected mailbox
-        s_result, s_data = imap_connection.search(None, "ALL")
-        logger.debug("Mailbox search result: %s", s_result)
-        logger.debug("Mailbox search data: %s", s_data)
-        for email_id in s_data[0].split():
-            logger.debug("Fetching mail #%s", email_id)
-            f_result, f_data = imap_connection.fetch(email_id, "(RFC822)") # Fetch the complete email message
-            logger.debug("Mailbox fetch result: %s", f_result)
-            email_message = email.message_from_string(f_data[0][1])
-            
-            # TODO: Add the email  message to MBOX
-            
-            # Write the email to a TXT file
-            self.email_to_txt(email_id, email_message, self.path)
-            
-        # Close selected mailbox
-        try:
-            logger.debug("Closing selected IMAP mailbox")
-            self.imap_connection.close()
-        except Exception as e:
-                logger.warn("Could not close selected IMAP mailbox")
-                logger.debug(e)
-    
+
+        # Tag the mailbox as processed
+        self.processed = True
         return
     

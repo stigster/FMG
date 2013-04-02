@@ -22,17 +22,20 @@
 # USE AT YOUR OWN RISK!
 ###
 
-import os, shutil
+#import os
+import shutil
 from time import localtime, strftime
 import zipfile
 import hashlib
-import email, mimetypes
-import imaplib
+#import email
+#import mimetypes
+import mailbox
+#import imaplib
 import logging
 import re
 
 from accountError import *
-from mailbox import *
+from fmg_mailbox import *
 
 ## GLOBAL VARIABLES ##
 yes = set(['yes', 'y', 'j', 'ja', ''])
@@ -47,8 +50,7 @@ class Account():
     """FMG Mail Account Handling Class"""
 
     ## DEFINE CLASS VARIABLES ##
-    retreived = False # Has mailed been retreived for this account?
-    tried = False # Has an attempt to retreive mail for this account been made?
+    retrieved = False # Has mailed been retrieved for this account?
 
     email = None # The email address to grab
     username = None # Email account username
@@ -64,16 +66,12 @@ class Account():
     fmgdir = None
     accountdir = None
     
-    currentMailbox = None # Used to track mailbox processing
-    currentMailboxHasChildren = None # Used to track mailbox processing
-
-    maildirdir = None
-    maildirnew = None
-    maildirtmp = None
-    maildircur = None
-
+    txtdir = None
+    
     mboxdir = None
-    maboxfilename = None
+    mboxfilename = None
+    mboxfilepath = None
+    mboxfile = None
     
     imap_connection = None
 
@@ -97,59 +95,40 @@ class Account():
         return
         
 
-## REMOVE CREATED FOLDERS AND FILES ##
-    def cleanup(self):
-        """Remove created folders and files"""
-        logger.debug("Cleaning up account")
-        try:
-            shutil.rmtree(self.maildirdir)
-            shutil.rmtree(self.mboxdir)
-        except Exception as e:
-            logger.error("Cleanup failed. %s", e)
-        return
-
 ## PREPARE FILES AND FOLDERS ##
     def prepDir(self):
         """Prepare file system directories for FMG"""
         logger.debug("Preparing account files and folders")
-        # Prepare names
+
         # FMG directories
         self.fmgdir = os.path.join(os.path.expanduser("~"), "fmg")
         self.accountdir = os.path.join(self.fmgdir, self.basename)
-
-        # Maildir directories
-        logger.debug("Setting MailDir directory paths")
-        self.maildirdir = os.path.join(os.path.expanduser("~"), "Maildir_" + self.username)
-        self.maildirnew = os.path.join(self.maildirdir, "new")
-        self.maildirtmp = os.path.join(self.maildirdir, "tmp")
-        self.maildircur = os.path.join(self.maildirdir, "cur")
-
-        # Mbox directory and file
-        logger.debug("Setting MBOX directory path and filename")
-        self.mboxdir = os.path.join(os.path.expanduser("~"), "Mbox")
-        self.mboxfilename = os.path.join(self.mboxdir, self.username + ".MBOX")
-
+        
         # Create FMG directory, if it does not exist
         if not os.path.isdir(self.fmgdir):
             logger.debug("Creating FMG directory")
             os.mkdir(self.fmgdir)
-
+        
+        # Create account directory
         logger.debug("Creating account directory")
         os.mkdir(self.accountdir)
-
-        # Create Maildir directories
-        logger.debug("Creating MailDir directories")
-        if os.path.isdir(self.maildirdir):
-            raise AccountError("Maildir folder exists.")
+        
+        # Create TEXT output directory
+        self.txtdir = os.path.join(self.accountdir, "TEXT")
+        if os.path.exists(self.txtdir):
+            raise AccountError("TEXT directory exists")
         else:
             try:
-                os.mkdir(self.maildirdir)
-                os.mkdir(self.maildirnew)
-                os.mkdir(self.maildirtmp)
-                os.mkdir(self.maildircur)
+                os.mkdir(self.txtdir)
             except Exception as e:
-                raise AccountError("Error creating Maildir directories:\n%s" % e)
+                raise AccountError("Error creating TEXT directory:\n%s" % e)
 
+        # Mbox directory and file
+        logger.debug("Setting MBOX directory path and filename: %s", os.path.join(self.accountdir, "MBOX", self.username + ".MBOX"))
+        self.mboxdir = os.path.join(self.accountdir, "MBOX")
+        self.mboxfilename = self.username + ".MBOX"
+        self.mboxfilepath = os.path.join(self.mboxdir, self.username + ".MBOX")
+        
         # Create Mbox directory and Mbox-file
         logger.debug("Creating MBOX directory")
         if os.path.isdir(self.mboxdir):
@@ -159,12 +138,14 @@ class Account():
                 os.mkdir(self.mboxdir)
             except Exception as e:
                 raise AccountError("Error creating Mbox directory:\n%s" % e)
+
+        # Create the MBOX file
+        try:
             logger.debug("Creating MBOX file")
-            try:
-                mboxfile = open(self.mboxfilename, "w")
-                mboxfile.close()
-            except Exception as e:
-                raise AccountError("Error creating Mbox file:\n%s" % e)
+            self.mboxfile = mailbox.mbox(self.mboxfilepath)
+        except Exception as e:
+            logger.error("Failed to create MBOX file")
+            logger.debug(e)
 
         return
 
@@ -189,7 +170,7 @@ class Account():
                 logger.debug(e)
                 return None
 
-        # Log in using provided username and password
+        # Log in using provided user name and password
         try:
             logger.debug("Logging in user '%s'", self.username)
             imap_connection.login(self.username, self.password)
@@ -218,8 +199,8 @@ class Account():
             flags = flags.split() # Make a list of the flags
             logger.debug("Processing mailbox item %s", item)
             
-            # Create folder for this mailbox
-            mailbox_path = os.path.join(self.accountdir, mailbox_name)
+            # Create text output folder for this mailbox
+            mailbox_path = os.path.join(self.txtdir, mailbox_name)
             if not os.path.exists(mailbox_path):
                 try:
                     logger.debug("Creating mailbox folder '%s'", mailbox_path)
@@ -232,11 +213,11 @@ class Account():
             if not mailbox_name in self.mailbox_list:
                 logger.debug("Adding %s to mailbox list", mailbox_name)
                 logger.debug("Path for mailbox %s set to %s", mailbox_name, mailbox_path)
-                self.mailbox_list[mailbox_name] = Mailbox(mailbox_name, mailbox_path, item)
+                self.mailbox_list[mailbox_name] = FMGMailbox(mailbox_name, mailbox_path, item)
             
                 # If the current mailbox has children, call recursively
-                if "HasChildren" in flags: #re.search("HasChildren", flags):
-                    logger.debug("Mailbox has children")
+                if "HasChildren" in flags:
+                    logger.debug("FMGMailbox has children")
                     response_code, childlist = self.imap_connection.list(mailbox_name)
                     logger.debug("(%s) %s", response_code, childlist)
                     self.buildMailboxList(childlist)
@@ -247,7 +228,6 @@ class Account():
         logger.debug("Grabbing mail from IMAP server")
 
         # Connect to IMAP Server
-        # TODO: Add try - except block
         try:
             self.imap_connection = self.connectImap()
         except Exception as e:
@@ -257,7 +237,7 @@ class Account():
         
         # Get all the mailboxes/folders in the IMAP account
         try:
-            logger.debug("Getting IMAP mailbox list")
+            logger.debug("Getting IMAP current_fmgmailbox list")
             response_code, remote_mailbox_list = self.imap_connection.list()
             logger.debug(remote_mailbox_list)
         except Exception as e:
@@ -272,17 +252,37 @@ class Account():
             logger.debug("List created (%d items)", len(self.mailbox_list))
             logger.debug(self.mailbox_list)
             
-        # Process all the mailboxes            
+        # Lock the MBOX file before processing mailboxes
+        try:
+            logger.debug("Locking MBOX file")
+            self.mboxfile.lock()
+        except Exception as e:
+            logger.error("Failed to lock MBOX file")
+            logger.debug(e)
+            
+        # Process all the mailboxes
         for mailbox_name in self.mailbox_list.keys():
-            mailbox = self.mailbox_list[mailbox_name]
+            current_fmgmailbox = self.mailbox_list[mailbox_name]
             logger.debug("Processing mailbox %s", mailbox_name)
             try:
-                mailbox.process(self.imap_connection)
+                current_fmgmailbox.process(self.imap_connection, self.mboxfile)
             except Exception as e:
                 logger.warn("Could not process IMAP mailbox '%s'", mailbox_name)
                 logger.debug(e)
                 return
+            
+        # Flush and unlock the MBOX file
+        try:
+            logger.debug("Flushing and unlocking MBOX file")
+            self.mboxfile.flush()
+            self.mboxfile.unlock()
+        except Exception as e:
+            logger.error("Failed to flush and unlock MBOX file")
+            logger.debug(e)
 
+        # At this stage, mail in the mailbox has been retrieved
+        self.retrieved = True
+        
         # Log out from IMAP connection
         try:
             logger.debug("Logging out from IMAP Connection")
@@ -303,7 +303,7 @@ class Account():
         return
 
 
-### EMAIL PROCESSING ###
+### POST PROCESSING ###
 
 ## CREATE A ZIP ARCHIVE CONTAINING ALL ORIGINAL FILES ##
 
@@ -354,12 +354,10 @@ class Account():
 
         return
 
-## COPY THE MBOX FILE ##
-    def copymboxfile(self):
-        shutil.copyfile(self.mboxfilename, os.path.join(self.accountdir, self.basename + ".MBOX"))
-
-        # Hash the original zip file
-        mboxfile_sha1 = hashlib.sha1(file(os.path.join(self.accountdir, self.basename + ".MBOX"), 'rb').read()).hexdigest()
+## HASH THE MBOX FILE ##
+    def hashmboxfile(self):
+        """Create a SHA-1 Hash file of the MBOX file"""
+        mboxfile_sha1 = hashlib.sha1(file(self.mboxfilepath, 'rb').read()).hexdigest()
         hashfilename = os.path.join(self.accountdir, self.basename + ".MBOX.sha1")
 
         logger.debug("MBOX File SHA-1: " + mboxfile_sha1)
@@ -369,6 +367,18 @@ class Account():
             hashfile.write(mboxfile_sha1)
             hashfile.close()
         except Exception as e:
-            raise AccountError("ERROR: Failed to write MBOX Hash file.\n%s" % e)
+            logger.warn("ERROR: Failed to write MBOX Hash file.")
+            logger.debug(e)
 
+        return
+    
+    def postprocess(self):
+        logger.debug("Now post-processing account...")
+        
+        # Hash
+        self.hashmboxfile()
+        
+        # Zip
+        logger.debug("Now zipping (DUMMY)")
+        
         return
