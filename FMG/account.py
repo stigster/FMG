@@ -32,6 +32,7 @@ import logging
 import re
 
 from accountError import *
+from mailbox import *
 
 ## GLOBAL VARIABLES ##
 yes = set(['yes', 'y', 'j', 'ja', ''])
@@ -279,8 +280,8 @@ class Account():
         # Get all the mailboxes/folders in the IMAP account
         try:
             logger.debug("Getting IMAP mailbox list")
-            response_code, mailbox_list = imap_connection.list()
-            logger.debug(mailbox_list)
+            response_code, remote_mailbox_list = imap_connection.list()
+            logger.debug(remote_mailbox_list)
         except Exception as e:
             logger.critical("Could not list IMAP mailboxes")
             logger.debug(e)
@@ -291,8 +292,11 @@ class Account():
             logger.debug("Mailbox processing...")
             self.currentMailbox = "" 
             
-            for mailbox_list_item in mailbox_list:
-                flags, delimiter, mailbox_name = self.parse_mailboxlist(mailbox_list_item)
+            self.mailbox_list = {}
+            
+            # Build list of all mailboxes to be processed
+            for remote_mailbox_list_item in remote_mailbox_list:
+                flags, delimiter, mailbox_name = self.parse_mailboxlist(remote_mailbox_list_item)
                 
                 # Create folder for this mailbox
                 mailbox_path = os.path.join(self.accountdir, mailbox_name)
@@ -302,16 +306,20 @@ class Account():
                         os.mkdir(mailbox_path)
                     except Exception as e:
                         logger.warn("Could not create mailbox folder '%s'", mailbox_path)
-                        logger.debug(e)  
+                        logger.debug(e)
+                        
+                # Add a mailbox object to the list of mailboxes and add relevant information
+                if not mailbox_name in self.mailbox_list:
+                    self.mailbox_list[mailbox_name] = Mailbox(mailbox_name, mailbox_path, remote_mailbox_list_item)
 
                 # Select the mailbox. (If selection fails, return and continue with the next mailbox.)
-                try:
-                    logger.debug("Selecting IMAP mailbox '%s'", mailbox_name)
-                    imap_connection.select(mailbox_name)
-                except Exception as e:
-                    logger.warn("Failed to select IMAP Mailbox '%s'", mailbox_name)
-                    logger.debug(e)
-                    continue
+                #try:
+                #    logger.debug("Selecting IMAP mailbox '%s'", mailbox_name)
+                #    imap_connection.select(mailbox_name)
+                #except Exception as e:
+                #    logger.warn("Failed to select IMAP Mailbox '%s'", mailbox_name)
+                #    logger.debug(e)
+                #    continue
 
                 # If the current mailbox has children, add it to the list of mailboxes for subsequent processing.
                 if re.search("HasChildren", flags):
@@ -321,7 +329,10 @@ class Account():
                     for child in childlist:
                         child_flag, child_delimiter, child_name = self.parse_mailboxlist(child)
                         logger.debug("Adding '%s' to list of mailboxes to process", child)
-                        mailbox_list.append(child_name)
+                        #remote_mailbox_list.append(child_name)
+                        # Add a mailbox object to the list of mailboxes and add relevant information
+                        if not child_name in self.mailbox_list:
+                            self.mailbox_list[child_name] = Mailbox(child_name, mailbox_path, child)
                 else:
                     logger.debug("Mailbox has no children")
                     try:
