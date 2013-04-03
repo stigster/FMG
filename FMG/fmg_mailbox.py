@@ -51,7 +51,7 @@ class FMGMailbox():
     processed = None # True if the mailbox has been processed, false if not.
     selected = None # True if the mailbox was selected successfully, false if not.
     mails = None # The number of mails found in the mailbox
-    
+
     def __init__(self, name, path, item):
         logger.debug("Initializing mailbox item %s, %s, %s", name, path, item)
         self.name = name
@@ -86,19 +86,80 @@ class FMGMailbox():
         
         # Write the email to a text file
         email_filename = email_id + ".txt"
+        
+        # Open a file to write to
         try:
             logger.debug("Writing email to text file '%s'", os.path.join(self.txtpath, email_filename))
             f = open(os.path.join(self.txtpath, email_filename), 'w')
-            if'message-id' in email_message:
-                f.write("ID: " + email_message_id + "\n")
-            f.write("From: " + email_message_from + "\n")
-            f.write("To: " + email_message_to + "\n")
-            f.write("Subject: " + email_message_subject + "\n")
-            f.write(email_message_text)
-            f.close()
         except Exception as e:
-            logger.warn("Failed to write email to text file '%s'", os.path.join(self.txtpath, email_filename))
+            logger.warn("Failed to open email to text file '%s'", os.path.join(self.txtpath, email_filename))
             logger.debug(e)
+
+        # If we got a file...
+        if f:
+            # .. and if there is a message id...
+            if 'message-id' in email_message:
+                # Write message id to text file
+                try:
+                    logger.debug("Message-ID string size %d", len(email_message_id))
+                    f.write("ID: " + email_message_id + "\n")
+                except Exception as e:
+                    logger.warn("Failed to write message ID to text file '%s'", os.path.join(self.txtpath, email_filename))
+                    if email_message_id:
+                        logger.debug("Message ID: %s", email_message_id)
+                    logger.debug(e)
+
+            # Write message from field to text file
+            try:
+                logger.debug("Message from string size %d", len(email_message_from))
+                f.write("From: " + email_message_from + "\n")
+            except Exception as e:
+                logger.warn("Failed to write message from field to text file '%s'", os.path.join(self.txtpath, email_filename))
+                if email_message_id:
+                    logger.debug("Message ID: %s", email_message_id)
+                logger.debug(e)
+
+            # Write message to field to text file
+            try:
+                logger.debug("Message to string size %d", len(email_message_to))
+                f.write("To: " + email_message_to + "\n")
+            except Exception as e:
+                logger.warn("Failed to write message to field to text file '%s'", os.path.join(self.txtpath, email_filename))
+                if email_message_id:
+                    logger.debug("Message ID: %s", email_message_id)
+
+                logger.debug(e)
+
+            # Write message subject field to text file
+            try:
+                logger.debug("Message subject string size %d", len(email_message_subject))
+                f.write("Subject: " + email_message_subject + "\n")
+            except Exception as e:
+                logger.warn("Failed to write message subject field to text file '%s'", os.path.join(self.txtpath, email_filename))
+                if email_message_id:
+                    logger.debug("Message ID: %s", email_message_id)
+                logger.debug(e)
+
+            # Write message text to text file
+            try:
+                logger.debug("Message text length: %d", len(email_message_text))
+                if len(email_message_text) > 0:
+                    f.write(email_message_text)
+            except Exception as e:
+                logger.warn("Failed to write message text field to text file '%s'", os.path.join(self.txtpath, email_filename))
+                if email_message_id:
+                    logger.debug("Message ID: %s", email_message_id)
+                logger.debug(e)
+
+            # Close the file
+            try:
+                f.close()
+            except Exception as e:
+                logger.warn("Failed to close text file '%s'", os.path.join(self.txtpath, email_filename))
+                if email_message_id:
+                    logger.debug("Message ID: %s", email_message_id)
+                logger.debug(e)
+
         return    
     
     def process(self, imap_connection, mbox):
