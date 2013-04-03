@@ -95,7 +95,7 @@ class FMGMailbox():
             logger.warn("Failed to open email to text file '%s'", os.path.join(self.txtpath, email_filename))
             logger.debug(e)
 
-        # If we got a file...
+        # If we got a file in which to store the email ...
         if f:
             # .. and if there is a message id...
             if 'message-id' in email_message:
@@ -159,6 +159,56 @@ class FMGMailbox():
                 if email_message_id:
                     logger.debug("Message ID: %s", email_message_id)
                 logger.debug(e)
+                
+        # If the message is multipart, there are attachments
+        if email_message.is_multipart():
+            logger.debug("Message is multipart. Extracting attachments")
+            load_n = 0
+            attachment_n = 0
+            for load in email_message.get_payload():
+                load_n += 1
+                load_maintype = load.get_content_maintype()
+                load_subtype = load.get_content_subtype()
+                logger.debug("Load %d: Type: %s/%s", load_n, load_maintype, load_subtype)
+                
+                if load_maintype == 'text' and load_subtype == 'plain':
+                    continue
+                if load_maintype == 'multipart':
+                    continue
+                
+                attachment_n += 1
+                
+                # Get attachment filename and make folder for attachments
+                attachment_dir = os.path.join(self.txtpath, email_id)
+                attachment_filename = load.get_filename()
+                if attachment_filename:
+                    logger.debug("Found attachment filename: %s", attachment_filename)
+                else:
+                    if load_subtype == "html":
+                        attachment_filename = email_id + ".html"
+                        logger.debug("Multipart is HTML. Filname set to %s", attachment_filename)
+                    else:
+                        attachment_filename = "Attachment_" + str(attachment_n)
+                        logger.debug("No attachment filename found. Using %s", attachment_filename)
+                    
+                try:
+                    if not os.path.exists(attachment_dir):
+                        os.mkdir(attachment_dir)
+                except Exception as e:
+                    logger.error("Failed to make attachment directory %s", attachment_dir)
+                    if email_message_id:
+                        logger.debug("Message ID: %s", email_message_id)
+                    logger.debug(e)
+                    
+                # Write the attachment to a file
+                try: 
+                    logger.debug("Writing attachment to file %s", os.path.join(attachment_dir, attachment_filename))
+                    open(os.path.join(attachment_dir, attachment_filename), 'wb').write(load.get_payload(decode=True))
+                except Exception as e:
+                    logger.error("Failed to write attachment to file %s", os.path.join(attachment_dir, attachment_filename))
+                    if email_message_id:
+                        logger.debug("Message ID: %s", email_message_id)
+                    logger.debug(e)
 
         return    
     
