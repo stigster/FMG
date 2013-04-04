@@ -302,83 +302,45 @@ class Account():
 
         return
 
-
 ### POST PROCESSING ###
-
-## CREATE A ZIP ARCHIVE CONTAINING ALL ORIGINAL FILES ##
-
-    def zipOriginal(self):
-        # Zip everything up
-        self.origzipfilename = os.path.join(self.accountdir, self.basename + "_fmg.zip")
+    def hashfile(self, filepath):
+        logger.debug("Hashing file %s", filepath)
+        basepath = os.path.split(filepath)[0]
+        filename = os.path.basename(filepath)
+        hashfilepath = os.path.join(basepath, filename + ".sha1")
+        filehash_sha1 = hashlib.sha1(file(filepath, 'rb').read()).hexdigest()
+        logger.debug("Hash (SHA-1): %s", filehash_sha1)
         try:
-            with zipfile.ZipFile(self.origzipfilename, 'w') as origzip:
-
-                # Add maildir to zip
-                origzip.write(self.maildirdir)
-                for (path, dirs, files) in os.walk(self.maildirdir):
-                    logger.debug("Zipping " + path)
-                    for name in files:
-                        logger.debug("Zipping file " + os.path.join(path, name))
-                        origzip.write(os.path.join(path, name))
-                    for name in dirs:
-                        logger.debug("Zipping directory " + os.path.join(path, name))
-                        origzip.write(os.path.join(path, name))
-
-                # Add mboxdir to zip
-                origzip.write(self.mboxdir)
-                for (path, dirs, files) in os.walk(self.mboxdir):
-                    logger.debug("Zipping " + path)
-                    for name in files:
-                        logger.debug("Zipping file " + os.path.join(path, name))
-                        origzip.write(os.path.join(path, name))
-                    for name in dirs:
-                        logger.debug("Zipping directory " + os.path.join(path, name))
-                        origzip.write(os.path.join(path, name))
-
-        except Exception as e:
-            raise AccountError("ERROR: Failed to create FMG Original package.\n%s" % e)
-
-
-        # Hash the original zip file
-        origzip_sha1 = hashlib.sha1(file(self.origzipfilename, 'rb').read()).hexdigest()
-        hashfilename = os.path.join(self.accountdir, self.basename + "_fmg.zip.sha1")
-
-        logger.debug("Original ZIP SHA-1: " + origzip_sha1)
-
-        try:
-            hashfile = open(hashfilename, 'w')
-            hashfile.write(origzip_sha1)
+            logger.debug("Writing hashfile %s", hashfilepath)
+            hashfile = open(hashfilepath, 'w')
+            hashfile.write(filehash_sha1)
             hashfile.close()
         except Exception as e:
-            raise AccountError("ERROR: Failed to write original ZIP Hash file.\n%s" % e)
-
-        return
-
-## HASH THE MBOX FILE ##
-    def hashmboxfile(self):
-        """Create a SHA-1 Hash file of the MBOX file"""
-        mboxfile_sha1 = hashlib.sha1(file(self.mboxfilepath, 'rb').read()).hexdigest()
-        hashfilename = os.path.join(self.accountdir, self.basename + ".MBOX.sha1")
-
-        logger.debug("MBOX File SHA-1: " + mboxfile_sha1)
-
-        try:
-            hashfile = open(hashfilename, 'w')
-            hashfile.write(mboxfile_sha1)
-            hashfile.close()
-        except Exception as e:
-            logger.warn("ERROR: Failed to write MBOX Hash file.")
+            logger.warn("Failed to write hash file %s", hashfilepath)
             logger.debug(e)
-
-        return
+            return False
+        return True
     
     def postprocess(self):
         logger.debug("Now post-processing account...")
         
         # Hash
-        self.hashmboxfile()
+        logger.debug("Hashing MBOX file")
+        self.hashfile(self.mboxfilepath)
+        
+        logger.debug("Hashing text files")
+        for root, dirs, files in os.walk(self.txtdir):
+            logger.debug("Root: %s", root)
+            logger.debug("Dirs: %s", dirs)
+            logger.debug("Files to hash: %s", files)
+            for f in files:
+                logger.debug("Hashing file: %s", os.path.join(root, f))
+                self.hashfile(os.path.join(root, f))
         
         # Zip
-        logger.debug("Now zipping (DUMMY)")
+        logger.debug("Now zipping %s", self.accountdir)
+        shutil.make_archive(os.path.join(self.fmgdir, self.basename), "zip", self.accountdir, logger=logger)
+        logger.debug("Now hashing zipfile %s", os.path.join(self.fmgdir, self.basename))
+        self.hashfile(os.path.join(self.fmgdir, self.basename + ".zip"))
         
         return

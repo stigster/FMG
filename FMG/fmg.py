@@ -3,24 +3,10 @@
 
 ###
 # fmg.py
-# Forensic Mail Grabber - Uses getmail and some other tools to download email from online providers.
-# Version: 0.7 (2013-03-23 13:30 CET)
+# Forensic Mail Grabber
 # by Stig Andersen <stig.andersen@politi.no>
 # High Tech Crime Unit, Oslo Police District
 ###
-
-###
-# DISCLAIMER:
-# This script will attempt to access the email address to which you provide information.
-# Make sure you have legal access to the address before running this script!
-# 
-# This script is provided free of charge to law enforcement organizations world-wide.
-# This script may not be used in conjunction with any form of illegal activity.
-#
-# No guarantee, warranty or insurance is provided.
-# USE AT YOUR OWN RISK!
-###
-
 
 # IMPORT SYSTEM PACKAGES #
 import logging  # @UnresolvedImport
@@ -288,15 +274,43 @@ class Fmg():
 
         # Validate and set protocol
         self.logger.debug("Setting protocol")
+        
+        # Try to get protocol selection from server url
         if self.imap:
             self.logger.debug("Protocol 'IMAP' set as cmd.line argument")
             self.protocol = 'IMAP'
         elif self.pop:
             self.logger.debug("Protocol 'POP' set as cmd.line argument")
             self.protocol = 'POP'
-        elif not self.force:
+        elif "imap" in self.serverurl.lower():
+            self.logger.debug("Found 'imap' in server url.")
+            verify_protocol = raw_input("Use IMAP protocol? [YES/No/Cancel]: ").lower()
+            if verify_protocol in yes:
+                self.logger.debug("Setting protocol to 'IMAP'")
+                self.protocol = 'IMAP'
+            if verify_protocol in no:
+                self.logger.debug("Protocol selection cleared.")
+                self.protocol = None
+            if verify_protocol in cancel:
+                self.logger.info("Protocol selection cancelled.")
+                self.logger.info("----- Terminating FMG -----")
+                exit(1)
+        elif "pop" in self.serverurl.lower():
+            self.logger.debug("Found 'pop' in server url. Setting protocol to 'POP'")
+            verify_protocol = raw_input("Use POP protocol? [YES/No/Cancel]: ").lower()
+            if verify_protocol in yes:
+                self.logger.debug("Setting protocol to 'POP'")
+                self.protocol = 'POP'
+            if verify_protocol in no:
+                self.logger.debug("Protocol selection cleared.")
+                self.protocol = None
+            if verify_protocol in cancel:
+                self.logger.info("Protocol selection cancelled.")
+                self.logger.info("----- Terminating FMG -----")
+                exit(1)
+        # Prompt user for protocol selection, unless force.
+        if not self.force and not self.protocol:
             self.logger.debug("Prompting for protocol selection")
-        # TODO: Check server url for protocol information
             imap = set(['imap', 'i', ''])
             pop = set(['pop', 'p'])
             while True:
@@ -316,9 +330,12 @@ class Fmg():
                 else:
                     print "Invalid selection, try again!"
         else:
-            self.logger.info("Assuming default protocol IMAP")
-            # TODO: Check server url for protocol information
-            self.protocol = 'IMAP'
+            if "pop" in self.serverurl.lower():
+                self.logger.info("Found POP in server url, using protocol POP.")
+                self.protocol = 'POP'
+            else:
+                self.logger.info("Assuming default protocol IMAP.")
+                self.protocol = 'IMAP'
 
         # Validate and set SSL
         self.logger.debug("Setting SSL")
@@ -503,13 +520,11 @@ class Fmg():
             yes = set(['yes', 'y', 'ja', 'j']) # Re-defining yes to avoid false verification
             while True:
                 verify_info = raw_input("Is this information correct? [Yes/No]: ")
-                if verify_info in yes:
+                if verify_info.lower() in yes:
                     self.logger.info("Information verified by user")
                     break
                 elif verify_info in no:
                     self.logger.info("Information not verified by user")
-                    self.logger.debug("Calling account cleanup")
-                    self.acc.cleanup()
                     self.logger.info("----- Terminating FMG -----")
                     exit(1)
                 else:
@@ -527,11 +542,13 @@ class Fmg():
         if not self.dry:
             if not self.quiet:
                 print "Grabbing mail... "
-                try:
-                    self.acc.grabMail()
-                except Exception as e:
-                    self.logger.error("Failed to grab mail")
-                    self.logger.debug(e)
+            try:
+                self.acc.grabMail()
+            except Exception as e:
+                self.logger.error("Failed to grab mail")
+                self.logger.debug(e)
+            if not self.quiet:
+                print "Grabbing complete."
         else:
             self.logger.info("Dry run. No mail to process.")
 
@@ -540,13 +557,14 @@ class Fmg():
             self.logger.info("Post-Processing")
             if not self.dry:
                 if not self.quiet:
-                    print "Processing mail... "
+                    print "Post-Processing mail... "
                 try:
                     self.acc.postprocess()
                     if not self.quiet:
-                        print "Mail processed"
+                        print "Post-Processing complete"
                 except AccountError as ae:
                     self.logger.warning("Failed to post-process retrieved mail")
+
             else:
                 self.logger.info("Dry run. No post-processing necessary.")
         else:
@@ -560,25 +578,31 @@ class Fmg():
 ### MAIN ###
 
 # Parse command line arguments
-ver  = "0.7 (2013-03-23 13:30 CET)"
+ver  = "0.2 BETA (2013-04-04)"
 byline = "by Stig Andersen <stig.andersen@politi.no>"
 copyr = "(C) High Tech Crime Unit, Oslo Police District"
 desc = """
-Downloads and processes email from online email providers for forensic investigations.
-Outputs to MBOX and Maildir. PDF and/or HTML output functionality to be added later.
+Downloads and processes email from online email providers for digital forensic investigations.
+Outputs to MBOX and plain text.
 
 USAGE NOTE:
 If one or more command line options are missing, the script will prompt for input.
 """
 epil = """
 DISCLAIMER:
-This script will attempt to access the email address to which you provide information.
-Make sure you have legal access to the address before running this script!
+Forensic Mail Grabber consists of several files. Any reference in the following to "FMG", "Forensic Mail Grabber",
+"this script" or similar shall be understood to include all files related to the Forensic Mail Grabber project.
 
-This script is provided free of charge to law enforcement organizations world-wide.
-This script may not be used in conjunction with any form of illegal activity.
+FMG will attempt to access the email account and related server to which you provide information. Make sure you have
+legal access to the address before running this script!
 
-No guarantee, warranty or insurance is provided.
+FMG is provided free of charge to domestic law enforcement organizations world-wide. FMG script may not be used for
+any form of illegal activity, including espionage and foreign intelligence collection.
+
+FMG is provided as-is. The authors, the Norwegian government, its instrumentalities, officers, employees and other
+collaborators to the FMG project, make NO WARRANTY, express or implied, as to the usefullness of the script and documentation
+for any purpose. They assume no responsibility for the use of the script and documentation, or to provide technical support.
+
 USE AT YOUR OWN RISK!
 """
 
