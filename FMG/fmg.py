@@ -1,4 +1,4 @@
-#!/usr/bin/env python -c
+﻿#!/usr/bin/env python -c
 # -*- coding: utf-8 -*-
 
 ###
@@ -535,7 +535,7 @@ class Fmg():
         # Go grab the email
         self.logger.info("Getting mail from %s", self.acc.email)
         self.logger.info("User name: %s", self.acc.username)
-        self.logger.info("Password: %s", self.acc.password)
+        self.logger.info("Password: [NOT LOGGED]")#%s", self.acc.password)
         self.logger.info("Server: %s",self.acc.serverurl)
         self.logger.info("Port: %s", self.acc.port)
         self.logger.info("Protocol: %s", self.acc.protocol)
@@ -544,11 +544,10 @@ class Fmg():
                 print "Grabbing mail... "
             try:
                 self.acc.grabMail()
+                print "Grabbing complete."
             except Exception as e:
                 self.logger.error("Failed to grab mail")
                 self.logger.debug(e)
-            if not self.quiet:
-                print "Grabbing complete."
         else:
             self.logger.info("Dry run. No mail to process.")
 
@@ -583,7 +582,7 @@ byline = "by Stig Andersen <stig.andersen@politi.no>"
 copyr = "(C) High Tech Crime Unit, Oslo Police District"
 desc = """
 Downloads and processes email from online email providers for digital forensic investigations.
-Outputs to MBOX and plain text.
+Outputs to MBOX and plain text, and stores attachments. All files are hashed using SHA-1.
 
 USAGE NOTE:
 If one or more command line options are missing, the script will prompt for input.

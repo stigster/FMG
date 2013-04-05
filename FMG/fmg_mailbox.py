@@ -1,4 +1,4 @@
-#!/usr/bin/env python -c
+﻿#!/usr/bin/env python -c
 # -*- coding: utf-8 -*-
 
 ###
@@ -246,7 +246,7 @@ class FMGMailbox():
         if selected[0] == "OK":
             self.selected = True
             self.mails = selected[1][0]
-            logger.debug("Selected mailbox contains %s messages", self.mails)
+            logger.info("Grabbing %s emails from mailbox folder %s", self.mails, self.name)
             
             # Get a list of all the messages in the selected mailbox
             s_result, s_data = imap_connection.search(None, "ALL")

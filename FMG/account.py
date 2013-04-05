@@ -1,25 +1,12 @@
-#!/usr/bin/env python -c
+﻿#!/usr/bin/env python -c
 # -*- coding: utf-8 -*-
 
 ###
 # account.py
 # Part of FMG
-# Forensic Mail Grabber - Uses getmail and some other tools to download email from online providers.
-# Version: 0.5 (2013-03-19 08:30 CET)
+# Forensic Mail Grabber
 # by Stig Andersen <stig.andersen@politi.no>
 # High Tech Crime Unit, Oslo Police District
-###
-
-###
-# DISCLAIMER:
-# This script will attempt to access the email address to which you provide information.
-# Make sure you have legal access to the address before running this script!
-# 
-# This script is provided free of charge to law enforcement organizations world-wide.
-# This script may not be used in conjunction with any form of illegal activity.
-#
-# No guarantee, warranty or insurance is provided.
-# USE AT YOUR OWN RISK!
 ###
 
 #import os
@@ -157,28 +144,33 @@ class Account():
             logger.debug("Connecting without SSL")
             try:
                 imap_connection = imaplib.IMAP4(self.serverurl, self.port)
+                logger.info("Connected to IMAP server %s:%s", self.serverurl, self.port)
             except Exception as e:
-                logger.error("Could not connect to IMAP server")
-                logger.debug(e)
-                return None
+                #logger.error("Could not connect to IMAP server")
+                #logger.debug(e)
+                #return None
+                raise AccountError(e)
         else: # ... or with SSL
             logger.debug("Connecting with SSL")
             try:
                 imap_connection = imaplib.IMAP4_SSL(self.serverurl, self.port)
+                logger.info("Connected to IMAP SSL server %s:%s", self.serverurl, self.port)
             except Exception as e:
-                logger.error("Could not connect to IMAP SSL server")
-                logger.debug(e)
-                return None
+                #logger.error("Could not connect to IMAP SSL server")
+                #logger.debug(e)
+                #return None
+                raise AccountError(e)
 
         # Log in using provided user name and password
+        logger.debug("Logging in user '%s'", self.username)
         try:
-            logger.debug("Logging in user '%s'", self.username)
             imap_connection.login(self.username, self.password)
+            logger.info("Logged in as %s", self.username)
         except Exception as e:
             logger.error("Could not log on to the user account '%s'", self.username)
             logger.debug(e)
             return None
-        
+
         return imap_connection        
 
     def parse_mailboxlist(self, mailbox_list_item):
@@ -197,6 +189,7 @@ class Account():
             flags, delimiter, mailbox_name = self.parse_mailboxlist(item)
             flags = re.sub("\\\\", "", flags) # Remove \ from flags string
             flags = flags.split() # Make a list of the flags
+            logger.info("Found mailbox folder %s", mailbox_name)
             logger.debug("Processing mailbox item %s", item)
             
             # Create text output folder for this mailbox
@@ -217,7 +210,7 @@ class Account():
             
                 # If the current mailbox has children, call recursively
                 if "HasChildren" in flags:
-                    logger.debug("FMGMailbox has children")
+                    logger.debug("Mailbox has children")
                     response_code, childlist = self.imap_connection.list(mailbox_name)
                     logger.debug("(%s) %s", response_code, childlist)
                     self.buildMailboxList(childlist)
@@ -233,7 +226,7 @@ class Account():
         except Exception as e:
             logger.critical("Could not connect to IMAP server")
             logger.debug(e)
-            return
+            raise # Re-throw the same error back to grabMail
         
         # Get all the mailboxes/folders in the IMAP account
         try:
@@ -298,7 +291,12 @@ class Account():
         logger.debug("Grabbing mail")
 
         if self.protocol == 'IMAP':
-            self.grabImap()
+            try:
+                self.grabImap()
+            except Exception as e:
+                logger.debug("Grab failed")
+                logger.debug(e)
+                raise
 
         return
 
