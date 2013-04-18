@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python -c
+#!/usr/bin/env python -c
 # -*- coding: utf-8 -*-
 
 ###
@@ -147,34 +147,41 @@ class Fmg():
             self.logger.debug("Prompting for username verification")
             email_re = re.match(r"(.+)@(.+)", self.email)
             input_txt = "Use '%s' as username? [YES/No/Cancel]: " % email_re.group(1)
+            verify_username = None
             while True:
-                verify_username = raw_input(input_txt)
+                verify_username = raw_input(input_txt).lower()
                 if verify_username in yes:
                     self.logger.debug("Username verified by user")
                     self.username = email_re.group(1)
                     break
                 elif verify_username in no:
-                    self.logger.debug("Prompting for username")
-                    n = 0
-                    while True:
-                        self.username = raw_input("Username: ")
-                        if not self.username == "":
-                            self.logger.debug("A username was entered")
-                            break
-                        else:
-                            n = n + 1
-                            if n == 3:
-                                self.logger.debug("Terminating after 3 prompts for username")
-                                self.logger.critical("No username found")
-                                self.logger.info("----- Terminating FMG -----")
-                                exit(1)
-                            print "No username entered. Try again (%d/3)." % n
+                    self.logger.debug("Username not correct according to user")
+                    break
                 elif verify_username in cancel:
                     self.logger.info("Username verification cancelled")
                     self.logger.info("----- Terminating FMG -----")
                     exit(1)
                 else:
                     print "Invalid selection, try again!"
+
+            # Get username from user
+            if verify_username in no:
+                self.logger.debug("Prompting for username")
+                n = 0
+                while True:
+                    self.username = raw_input("Username: ")
+                    if not self.username == "":
+                        self.logger.debug("A username was entered")
+                        break
+                    else:
+                        n = n + 1
+                        if n == 3:
+                            self.logger.debug("Terminating after 3 prompts for username")
+                            self.logger.critical("No username found")
+                            self.logger.info("----- Terminating FMG -----")
+                            exit(1)
+                        print "No username entered. Try again (%d/3)." % n
+
         else:
             self.logger.info("Assuming username from email address")
             email_re = re.match(r"(.+)@(.+)", self.email)
