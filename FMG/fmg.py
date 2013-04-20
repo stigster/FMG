@@ -110,11 +110,8 @@ class Fmg():
 
         return
 
-
-    # GET AND VALIDATE INPUT #
-    def getInput(self):
-        """VALIDATE INPUT, SET CORRECT VALUES, PROMPT FOR MISSING VALUES"""
-    
+    # Get email address input
+    def getInput_email(self):
         # Validate and set email address
         self.logger.debug("Setting email address")
         if self.email:
@@ -138,8 +135,10 @@ class Fmg():
             self.logger.critical("Forced to terminate: No email address!")
             self.logger.info("----- Terminating FMG -----")
             exit(1)
+        return
 
     # Validate and set username
+    def getInput_username(self):
         self.logger.debug("Setting username")
         if self.username:
             self.logger.debug("Using username from cmd.line argument")
@@ -190,8 +189,10 @@ class Fmg():
                 self.logger.critical("Forced to terminate: No username!")
                 self.logger.info("----- Terminating FMG -----")
                 exit(1)
+        return
 
-        # Validate and set password (NOTE: Password is not validated against the server. Only input validation.)
+    # Validate and set password (NOTE: Password is not validated against the server. Only input validation.)
+    def getInput_password(self):
         self.logger.debug("Setting passord")
         if self.password:
             self.logger.debug("Using password from cmd.line argument")
@@ -209,8 +210,10 @@ class Fmg():
             self.logger.critical("Forced to terminate: No password!")
             self.logger.info("----- Terminating FMG -----")
             exit(1)
+        return
 
-        # Validate and set server URL
+    # Validate and set server URL
+    def getInput_serverurl(self):
         self.logger.debug("Setting server url")
         if self.serverurl:
             self.logger.debug("Using server URL from cmd.line argument")
@@ -218,9 +221,8 @@ class Fmg():
             self.logger.debug("Prompting for server URL")
             verify_url = False
             
-            if not email_re:
-                self.logger.debug("Getting server url from email address")
-                email_re = re.match(r"(.+)@(.+)", self.email)
+            self.logger.debug("Getting server url from email address")
+            email_re = re.match(r"(.+)@(.+)", self.email)
 
             if self.imap or self.pop:
                 if self.imap:
@@ -236,7 +238,7 @@ class Fmg():
                 input_txt = "Use %s as server url? [YES/No/Cancel]: " % self.serverurl
 
                 while True:
-                    verify_url = raw_input(input_txt)
+                    verify_url = raw_input(input_txt).lower()
                     if verify_url in yes:
                         self.logger.debug("Server url verified by user")
                         verify_url = True
@@ -278,8 +280,10 @@ class Fmg():
             elif self.protocol == 'POP':
                 self.logger.debug("Protocol is POP, completing server url accordingly")
                 self.serverurl = "pop." + email_re.group(2)
+        return
 
-        # Validate and set protocol
+    # Validate and set protocol
+    def getInput_protocol(self):
         self.logger.debug("Setting protocol")
         
         # Try to get protocol selection from server url
@@ -343,8 +347,10 @@ class Fmg():
             else:
                 self.logger.info("Assuming default protocol IMAP.")
                 self.protocol = 'IMAP'
+        return
 
-        # Validate and set SSL
+    # Validate and set SSL
+    def getInput_ssl(self):
         self.logger.debug("Setting SSL")
         if self.ssl:
             self.logger.debug("SSL set from cmd.line argument")
@@ -355,7 +361,7 @@ class Fmg():
         elif not self.force:
             self.logger.debug("Prompting for SSL")
             while True:
-                verify_ssl = raw_input("Use SSL encryption? [YES/No/Cancel]: ")
+                verify_ssl = raw_input("Use SSL encryption? [YES/No/Cancel]: ").lower()
                 if verify_ssl in yes:
                     self.logger.debug("User selected SSL ON")
                     self.ssl = True
@@ -373,8 +379,10 @@ class Fmg():
         else:
             self.logger.debug("Forced to assume default, assuming SSL true")
             self.ssl = True
+        return
 
-        # Validate and set server port
+    # Validate and set server port
+    def getInput_port(self):
         self.logger.debug("Setting server port")
         if self.port:
             self.logger.debug("Using server port from cmd.line argument")
@@ -397,7 +405,7 @@ class Fmg():
 
             input_txt = "Use %s as server port? [YES/No/Cancel]: " % self.port
             while True:
-                verify_port = raw_input(input_txt)
+                verify_port = raw_input(input_txt).lower()
                 if verify_port in yes:
                     self.logger.debug("Server port verified by user")
                     break
@@ -437,7 +445,18 @@ class Fmg():
             elif self.protocol == 'POP':
                 self.logger.debug("Protocol is POP and SSL is NOT set. Suggesting default POP3 port")
                 self.port = "110"
+        return
 
+    # GET AND VALIDATE INPUT #
+    def getInput(self):
+        """VALIDATE INPUT, SET CORRECT VALUES, PROMPT FOR MISSING VALUES"""
+        self.getInput_email()
+        self.getInput_username()
+        self.getInput_password()
+        self.getInput_serverurl()
+        self.getInput_protocol()
+        self.getInput_ssl()
+        self.getInput_port()
         return
 
     # FMG INIT #
@@ -526,8 +545,8 @@ class Fmg():
     
             yes = set(['yes', 'y', 'ja', 'j']) # Re-defining yes to avoid false verification
             while True:
-                verify_info = raw_input("Is this information correct? [Yes/No]: ")
-                if verify_info.lower() in yes:
+                verify_info = raw_input("Is this information correct? [Yes/No]: ").lower()
+                if verify_info in yes:
                     self.logger.info("Information verified by user")
                     break
                 elif verify_info in no:
