@@ -39,8 +39,8 @@ class Fmg():
     protocol = None
 
     imap = None
-    pop = None
-    mapi = None
+    pop = None # For future implementation
+    mapi = None # For future implementation
 
     ssl = None
     nossl = None
@@ -306,6 +306,8 @@ class Fmg():
                 self.logger.info("Protocol selection cancelled.")
                 self.logger.info("----- Terminating FMG -----")
                 exit(1)
+                
+        # POP isn´t implemented!
         elif "pop" in self.serverurl.lower():
             self.logger.debug("Found 'pop' in server url. Setting protocol to 'POP'")
             verify_protocol = raw_input("Use POP protocol? [YES/No/Cancel]: ").lower()
@@ -323,13 +325,14 @@ class Fmg():
         if not self.force and not self.protocol:
             self.logger.debug("Prompting for protocol selection")
             imap = set(['imap', 'i', ''])
-            pop = set(['pop', 'p'])
+            pop = set(['pop', 'p']) # For future implementation
             while True:
                 select_protocol = raw_input("Select server protocol type [IMAP, Pop] (Type 'c' to cancel'): ").lower()
                 if select_protocol in imap:
                     self.logger.debug("Setting protocol to 'IMAP'")
                     self.protocol = 'IMAP'
                     break
+                # POP isn´t implemented!
                 elif select_protocol in pop:
                     self.logger.debug("Setting protocol to 'POP'")
                     self.protocol = 'POP'
@@ -467,8 +470,8 @@ class Fmg():
         self.serverurl = serverurl
         self.port = port
         self.imap = imap
-        self.mapi = mapi
-        self.pop = pop
+        self.mapi = mapi # Leaving MAPI in for future implementation
+        self.pop = pop # For future implementation
         self.ssl = ssl
         self.nossl = nossl
         self.debug = debug
@@ -641,8 +644,9 @@ parser.add_argument('-p', '--port', help='The port on which to contact the serve
 
 servertypegroup = parser.add_mutually_exclusive_group()
 servertypegroup.add_argument('-I', '--imap', action='store_true', help='Communicate with the server using the IMAP protocol', default=False)
-servertypegroup.add_argument('-M', '--mapi', action='store_true', help='Communicate with the server using the MAPI protocol', default=False)
-servertypegroup.add_argument('-P', '--pop', action='store_true', help='Communicate with the server using the POP protocol', default=False)
+# MAPI and POP options removed - functionality not implemented.
+# servertypegroup.add_argument('-M', '--mapi', action='store_true', help='Communicate with the server using the MAPI protocol', default=False)
+# servertypegroup.add_argument('-P', '--pop', action='store_true', help='Communicate with the server using the POP protocol', default=False)
 
 sslgroup = parser.add_mutually_exclusive_group()
 sslgroup.add_argument('-S', '--ssl', action="store_true", help='Communicate with the server using SSL encryption', default=False)
@@ -673,8 +677,8 @@ f = Fmg(email = args.email,
         serverurl = args.server,
         port = args.port,
         imap = args.imap,
-        mapi = args.mapi,
-        pop = args.pop,
+        mapi = None, #args.mapi, # MAPI isn´t implemented!
+        pop = None, #args.pop, # POP isn´t implemented!
         ssl = args.ssl,
         nossl = args.nossl,
         debug = args.debug,

@@ -9,7 +9,7 @@ transfer. All actions are logged.
 
 By Stig Andersen,
 stig dot andersen at politiet dot no,
-High Tech Crime Unit,
+Digital Forensic Unit,
 Oslo Police District,
 Norway
 
