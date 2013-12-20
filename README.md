@@ -37,7 +37,7 @@ the FORCE option is engaged.
 
 ```
 $ fmg.py [-h] [-e EMAIL] [-u USERNAME] [-w PASSWORD] [-s SERVER]
-              [-p PORT] [-I | -M | -P] [-S | -N] [-D | -V | -Q] [-d | -F]
+              [-p PORT] [-t TARGETDIR] [-I] [-S | -N] [-D | -V | -Q] [-d | -F]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -50,12 +50,15 @@ optional arguments:
   -s SERVER, --server SERVER
                         The server URL to access (e.g. imap.gmail.com)
   -p PORT, --port PORT  The port on which to contact the server
+  -t TARGETDIR, --targetdir TARGETDIR
+                        Target directory in which to store the result.
+                        (Defaults to the FMG directory)
   -I, --imap            Communicate with the server using the IMAP protocol
   -S, --ssl             Communicate with the server using SSL encryption
   -N, --nossl           Communicate with the server without encryption
   -D, --debug           Display debug information
-  -V, --verbose         Output more info to console during processing
-  -Q, --quiet           Output only necessary info to screen
+  -V, --verbose         Display more info to console during processing
+  -Q, --quiet           Display only necessary info to screen
   -d, --dry             Dry-run. Do not access the server
   -F, --force           Ignore warnings and verifications. USE WITH CAUTION!
 ```
@@ -66,9 +69,9 @@ values have been selected where applicable.
 ```
 ------------------------------------------------------
         FMG - Forensic Mail Grabber
-        0.2 BETA (2013-04-04)
+        0.3 BETA (2013-12-20)
      by Stig Andersen <stig.andersen@politi.no>
-   (C) High Tech Crime Unit, Oslo Police District
+   (C) Digital Forensics Unit, Oslo Police District
 ------------------------------------------------------
 Email address (Type 'c' to cancel): username@email.com
 Use 'username' as username? [YES/No/Cancel]:
@@ -77,6 +80,7 @@ Server URL: imap.email.com
 Use IMAP protocol? [YES/No/Cancel]:
 Use SSL encryption? [YES/No/Cancel]:
 Use 993 as server port? [YES/No/Cancel]:
+Target directory (Hit 'enter' to default, type 'c' to cancel):
 ------------------
 VERIFY INFORMATION
 ------------------
@@ -87,6 +91,7 @@ Server: imap.email.com
 Port: 993
 Protocol: IMAP
 SSL: Enabled
+Target directory: /Users/<username>/fmg
 Is this information correct? [Yes/No]: yes
 Grabbing mail...
 Grabbing complete.

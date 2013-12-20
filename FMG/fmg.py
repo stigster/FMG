@@ -258,6 +258,7 @@ class Fmg():
                     break
                 elif verify_url in no:
                     verify_url = False
+                    break
                 elif verify_url in cancel:
                     self.logger.info("Server URL input cancelled")
                     self.logger.info("----- Terminating FMG -----")
@@ -660,7 +661,7 @@ class Fmg():
 ### MAIN ###
 
 # Parse command line arguments
-ver  = "0.3 BETA (2013-12-19)"
+ver  = "0.3 BETA (2013-12-20)"
 byline = "by Stig Andersen <stig.andersen@politi.no>"
 copyr = "(C) Digital Forensics Unit, Oslo Police District"
 desc = """
