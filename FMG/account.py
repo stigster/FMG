@@ -50,7 +50,7 @@ class Account():
     ssl = None # True if ssl is enabled, false if not
 
     basename = None
-    fmgdir = None
+    targetdir = None
     accountdir = None
     
     txtdir = None
@@ -62,7 +62,7 @@ class Account():
     
     imap_connection = None
 
-    def __init__(self, email, username, password, serverurl, protocol, port, ssl):
+    def __init__(self, email, username, password, serverurl, protocol, port, ssl, targetdir):
         # Set variables
         self.email = email
         self.username = username
@@ -74,6 +74,10 @@ class Account():
 
         # Set account basename
         self.basename = self.email + "_" + strftime("%Y-%m-%d-%H%M%S", localtime())
+        
+        # Set the target directory
+        # One might not be provided (None), in which case one will be created later
+        self.targetdir = targetdir
         
         # Prepare other variables
         self.mailbox_list = {}
@@ -87,18 +91,31 @@ class Account():
         """Prepare file system directories for FMG"""
         logger.debug("Preparing account files and folders")
 
-        # FMG directories
-        self.fmgdir = os.path.join(os.path.expanduser("~"), "fmg")
-        self.accountdir = os.path.join(self.fmgdir, self.basename)
+        # Directories
+        if not self.targetdir: # OBSOLETE! Moved to fmg.py/getInput_targetdir()
+            logger.debug("OBSOLETE! Target directory set by account.py")
+            self.targetdir = os.path.join(os.path.expanduser("~"), "fmg")
         
-        # Create FMG directory, if it does not exist
-        if not os.path.isdir(self.fmgdir):
-            logger.debug("Creating FMG directory")
-            os.mkdir(self.fmgdir)
+        #DEBUGPRINT
+        print "TARGETDIR: %s" % self.targetdir
+        
+        self.accountdir = os.path.join(self.targetdir, self.basename)
+        
+        # Create target directory, if it does not exist
+        if not os.path.exists(self.targetdir):
+            logger.debug("Creating the target directory")
+            os.mkdir(self.targetdir)
+        
+        # If the target directory exists, but isn't a directory, something is wrong.
+        if not os.path.isdir(self.targetdir):
+            raise AccountError("Target directory is not a directory.")
         
         # Create account directory
+        # The account directory is where FMG stores what is retrieved
+        # Using an account directory allows FMG to operate against an existing target directory without overwriting data.
         logger.debug("Creating account directory")
-        os.mkdir(self.accountdir)
+        if not os.path.exists(self.accountdir):
+            os.mkdir(self.accountdir)
         
         # Create TEXT output directory
         self.txtdir = os.path.join(self.accountdir, "TEXT")
@@ -337,8 +354,8 @@ class Account():
         
         # Zip
         logger.debug("Now zipping %s", self.accountdir)
-        shutil.make_archive(os.path.join(self.fmgdir, self.basename), "zip", self.accountdir, logger=logger)
-        logger.debug("Now hashing zipfile %s", os.path.join(self.fmgdir, self.basename))
-        self.hashfile(os.path.join(self.fmgdir, self.basename + ".zip"))
+        shutil.make_archive(os.path.join(self.targetdir, self.basename), "zip", self.accountdir, logger=logger)
+        logger.debug("Now hashing zipfile %s", os.path.join(self.targetdir, self.basename))
+        self.hashfile(os.path.join(self.targetdir, self.basename + ".zip"))
         
         return

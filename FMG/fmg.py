@@ -11,6 +11,7 @@
 # IMPORT SYSTEM PACKAGES #
 import logging  # @UnresolvedImport
 import os.path
+import shutil
 import argparse  # @UnresolvedImport
 from time import localtime, strftime # (strftime("%Y-%m-%d-%H%M%S", localtime()))
 import re  # @UnresolvedImport
@@ -44,6 +45,8 @@ class Fmg():
 
     ssl = None
     nossl = None
+    
+    targetdir = None
 
     debug = None
     verbose = None
@@ -53,6 +56,13 @@ class Fmg():
     force = None
 
     acc = None
+    
+    masterlog_path = None
+    masterlog_filename = None
+    runlog_path = None
+    runlog_filename = None
+    debuglog_path = None
+    debuglog_filename = None
 
     # SETUP LOGGING #
     def logSetup(self):
@@ -85,26 +95,26 @@ class Fmg():
             os.mkdir(os.path.join(os.path.expanduser("~"), "fmg"))
 
         # Log to file (masterlog)
-        masterlog_path = os.path.join(os.path.expanduser("~"), "fmg")
-        masterlog_filename = "fmg.log"
-        masterlog = logging.FileHandler(os.path.join(masterlog_path, masterlog_filename))
+        self.masterlog_path = os.path.join(os.path.expanduser("~"), "fmg")
+        self.masterlog_filename = "fmg.log"
+        masterlog = logging.FileHandler(os.path.join(self.masterlog_path, self.masterlog_filename))
         masterlog.setLevel(logging.INFO)
         masterlog.setFormatter(fileformatter)
         self.logger.addHandler(masterlog)
 
         # Runlog
-        runlog_path = masterlog_path
-        runlog_filename = "fmg_%s.log" % (strftime("%Y-%m-%d-%H%M%S_%Z", localtime()))
-        runlog = logging.FileHandler(os.path.join(runlog_path, runlog_filename), mode='w')
+        self.runlog_path = self.masterlog_path
+        self.runlog_filename = "fmg_%s.log" % (strftime("%Y-%m-%d-%H%M%S_%Z", localtime()))
+        runlog = logging.FileHandler(os.path.join(self.runlog_path, self.runlog_filename), mode='w')
         runlog.setLevel(logging.INFO)
         runlog.setFormatter(fileformatter)
         self.logger.addHandler(runlog)
 
         # Debuglog
         if self.debug:
-            debuglog_path = masterlog_path
-            debuglog_filename = "fmg_debug.log"
-            debuglog = logging.FileHandler(os.path.join(debuglog_path, debuglog_filename))
+            self.debuglog_path = self.masterlog_path
+            self.debuglog_filename = "fmg_debug.log"
+            debuglog = logging.FileHandler(os.path.join(self.debuglog_path, self.debuglog_filename))
             debuglog.setLevel(logging.DEBUG)
             self.logger.addHandler(debuglog)
 
@@ -223,6 +233,9 @@ class Fmg():
             
             self.logger.debug("Getting server url from email address")
             email_re = re.match(r"(.+)@(.+)", self.email)
+            
+            # IMAP is the only protocol currently supported by FMG
+            self.imap = True
 
             if self.imap or self.pop:
                 if self.imap:
@@ -235,22 +248,22 @@ class Fmg():
                     self.logger.debug("No protocol identified. Using 'mail' as subdomain.")
                     self.serverurl = "mail." + email_re.group(2)
 
-                input_txt = "Use %s as server url? [YES/No/Cancel]: " % self.serverurl
+            input_txt = "Use %s as server url? [YES/No/Cancel]: " % self.serverurl
 
-                while True:
-                    verify_url = raw_input(input_txt).lower()
-                    if verify_url in yes:
-                        self.logger.debug("Server url verified by user")
-                        verify_url = True
-                        break
-                    elif verify_url in no:
-                        verify_url = False
-                    elif verify_url in cancel:
-                        self.logger.info("Server URL input cancelled")
-                        self.logger.info("----- Terminating FMG -----")
-                        exit(1)
-                    else:
-                        print "Invalid input, try again"
+            while True:
+                verify_url = raw_input(input_txt).lower()
+                if verify_url in yes:
+                    self.logger.debug("Server url verified by user")
+                    verify_url = True
+                    break
+                elif verify_url in no:
+                    verify_url = False
+                elif verify_url in cancel:
+                    self.logger.info("Server URL input cancelled")
+                    self.logger.info("----- Terminating FMG -----")
+                    exit(1)
+                else:
+                    print "Invalid input, try again"
 
             if not verify_url:
                 n = 0
@@ -449,6 +462,34 @@ class Fmg():
                 self.logger.debug("Protocol is POP and SSL is NOT set. Suggesting default POP3 port")
                 self.port = "110"
         return
+        
+	# Validate and set target directory
+    def getInput_targetdir(self):
+        self.logger.debug("Setting target directory")
+        if self.targetdir:
+            self.logger.debug("Target directory set from cmd.line argument")
+        elif not self.force:
+            self.logger.debug("Prompting for target directory")
+            while True:
+                self.targetdir = raw_input("Target directory (Hit 'enter' to default, type 'c' to cancel): ")
+                self.logger.debug("Target directory entered: %s", self.targetdir)
+                if self.targetdir == "":
+                    self.logger.debug("Using default target directory")
+                    self.targetdir = os.path.join(os.path.expanduser("~"), "fmg")
+                    break
+                elif os.path.isabs(self.targetdir):
+                    self.logger.debug("Validated target directory")
+                    break
+                elif self.targetdir in cancel:
+                    self.logger.info("Target directory input cancelled")
+                    self.logger.info("----- Terminating FMG -----")
+                    exit(1)
+                else:
+                    print "Not a valid directory. Try again!"
+        else:
+            self.logger.debug("Forced to assume default target directory")
+            self.targetdir = os.path.join(os.path.expanduser("~"), "fmg")
+        return
 
     # GET AND VALIDATE INPUT #
     def getInput(self):
@@ -460,10 +501,13 @@ class Fmg():
         self.getInput_protocol()
         self.getInput_ssl()
         self.getInput_port()
+        self.getInput_targetdir()
         return
 
     # FMG INIT #
-    def __init__(self, email, username, password, serverurl, port, imap, mapi, pop, ssl, nossl, debug, verbose, quiet, dry, force):
+    def __init__(self, email, username, password, serverurl, port, imap, mapi, pop, ssl, 
+                 nossl, targetdir, debug, verbose, quiet, dry, force):
+        # Prepare variables
         self.email = email
         self.username = username
         self.password = password
@@ -474,12 +518,14 @@ class Fmg():
         self.pop = pop # For future implementation
         self.ssl = ssl
         self.nossl = nossl
+        self.targetdir = targetdir
         self.debug = debug
         self.verbose = verbose
         self.quiet = quiet
         self.dry = dry
         self.force = force
 
+		# Prepare the logs
         self.logSetup()
 
         # Log program start header
@@ -509,7 +555,8 @@ class Fmg():
                                self.serverurl, 
                                self.protocol, 
                                self.port, 
-                               self.ssl)
+                               self.ssl,
+                               self.targetdir)
         except AccountError as ae:
             self.logger.critical("Failed to create account object")
             self.logger.debug(ae)
@@ -544,7 +591,8 @@ class Fmg():
                 print "SSL: Enabled"
             else:
                 print "SSL: Disabled"
-                print "------------------"
+            print "Target directory: %s" % self.acc.targetdir
+            print "------------------"
     
             yes = set(['yes', 'y', 'ja', 'j']) # Re-defining yes to avoid false verification
             while True:
@@ -597,6 +645,12 @@ class Fmg():
                 self.logger.info("Dry run. No post-processing necessary.")
         else:
             self.logger.warn("No mail retrieved, no post-processing necessary.")
+            
+        # Copy the runlog to the target directory
+        if self.targetdir != self.runlog_path:
+            self.logger.debug("Copying runlog to target directory")
+            shutil.copy2(os.path.join(self.runlog_path, self.runlog_filename),
+                         os.path.join(self.targetdir, self.runlog_filename))
 
         # Terminate
         self.logger.info("----- FMG Complete -----")
@@ -606,9 +660,9 @@ class Fmg():
 ### MAIN ###
 
 # Parse command line arguments
-ver  = "0.2 BETA (2013-04-04)"
+ver  = "0.3 BETA (2013-12-19)"
 byline = "by Stig Andersen <stig.andersen@politi.no>"
-copyr = "(C) High Tech Crime Unit, Oslo Police District"
+copyr = "(C) Digital Forensics Unit, Oslo Police District"
 desc = """
 Downloads and processes email from online email providers for digital forensic investigations.
 Outputs to MBOX and plain text, and stores attachments. All files are hashed using SHA-1.
@@ -641,6 +695,7 @@ parser.add_argument('-u', '--username', help='The username used to access the ac
 parser.add_argument('-w', '--password', help='The password used to access the account', default=None)
 parser.add_argument('-s', '--server', help='The server URL to access (e.g. imap.gmail.com)', default=None)
 parser.add_argument('-p', '--port', help='The port on which to contact the server', default=None)
+parser.add_argument('-t', '--targetdir', help='Target directory in which to store the result. (Defaults to the FMG directory)', default=None)
 
 servertypegroup = parser.add_mutually_exclusive_group()
 servertypegroup.add_argument('-I', '--imap', action='store_true', help='Communicate with the server using the IMAP protocol', default=False)
@@ -654,8 +709,8 @@ sslgroup.add_argument('-N', '--nossl', action="store_true", help="Communicate wi
 
 verbosegroup = parser.add_mutually_exclusive_group()
 verbosegroup.add_argument('-D', '--debug', action='store_true', help='Display debug information', default=False)
-verbosegroup.add_argument('-V', '--verbose', action='store_true', help='Output more info to console during processing', default=False)
-verbosegroup.add_argument('-Q', '--quiet', action='store_true', help='Output only necessary info to screen', default=False)
+verbosegroup.add_argument('-V', '--verbose', action='store_true', help='Display more info to console during processing', default=False)
+verbosegroup.add_argument('-Q', '--quiet', action='store_true', help='Display only necessary info to screen', default=False)
 
 actiongroup = parser.add_mutually_exclusive_group()
 actiongroup.add_argument('-d', '--dry', action='store_true', help='Dry-run. Do not access the server', default=False)
@@ -681,6 +736,7 @@ f = Fmg(email = args.email,
         pop = None, #args.pop, # POP isn´t implemented!
         ssl = args.ssl,
         nossl = args.nossl,
+        targetdir = args.targetdir,
         debug = args.debug,
         verbose = args.verbose,
         quiet = args.quiet,

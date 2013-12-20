@@ -51,8 +51,6 @@ optional arguments:
                         The server URL to access (e.g. imap.gmail.com)
   -p PORT, --port PORT  The port on which to contact the server
   -I, --imap            Communicate with the server using the IMAP protocol
-  -M, --mapi            Communicate with the server using the MAPI protocol
-  -P, --pop             Communicate with the server using the POP protocol
   -S, --ssl             Communicate with the server using SSL encryption
   -N, --nossl           Communicate with the server without encryption
   -D, --debug           Display debug information
