@@ -6,7 +6,7 @@
 # Part of FMG
 # Forensic Mail Grabber
 # by Stig Andersen <stig.andersen@politi.no>
-# High Tech Crime Unit, Oslo Police District
+# Digital Forensics Unit, Oslo Police District
 ###
 
 #import os
@@ -91,10 +91,7 @@ class Account():
         """Prepare file system directories for FMG"""
         logger.debug("Preparing account files and folders")
 
-        # Directories
-        if not self.targetdir: # OBSOLETE! Moved to fmg.py/getInput_targetdir()
-            logger.debug("OBSOLETE! Target directory set by account.py")
-            self.targetdir = os.path.join(os.path.expanduser("~"), "fmg")
+        # Set account directory
         self.accountdir = os.path.join(self.targetdir, self.basename)
         
         # Create target directory, if it does not exist

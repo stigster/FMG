@@ -6,7 +6,7 @@
 # Part of FMG
 # Forensic Mail Grabber
 # by Stig Andersen <stig.andersen@politi.no>
-# High Tech Crime Unit, Oslo Police District
+# Digital Forensics Unit, Oslo Police District
 ###
 
 import logging

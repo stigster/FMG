@@ -5,7 +5,7 @@
 # fmg.py
 # Forensic Mail Grabber
 # by Stig Andersen <stig.andersen@politi.no>
-# High Tech Crime Unit, Oslo Police District
+# Digital Forensics Unit, Oslo Police District
 ###
 
 # IMPORT SYSTEM PACKAGES #
@@ -57,7 +57,7 @@ class Fmg():
 
     acc = None
     
-    masterlog_path = None
+     masterlog_path = None
     masterlog_filename = None
     runlog_path = None
     runlog_filename = None
