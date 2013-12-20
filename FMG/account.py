@@ -95,10 +95,6 @@ class Account():
         if not self.targetdir: # OBSOLETE! Moved to fmg.py/getInput_targetdir()
             logger.debug("OBSOLETE! Target directory set by account.py")
             self.targetdir = os.path.join(os.path.expanduser("~"), "fmg")
-        
-        #DEBUGPRINT
-        print "TARGETDIR: %s" % self.targetdir
-        
         self.accountdir = os.path.join(self.targetdir, self.basename)
         
         # Create target directory, if it does not exist
