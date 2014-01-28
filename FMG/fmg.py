@@ -57,7 +57,7 @@ class Fmg():
 
     acc = None
     
-     masterlog_path = None
+    masterlog_path = None
     masterlog_filename = None
     runlog_path = None
     runlog_filename = None
